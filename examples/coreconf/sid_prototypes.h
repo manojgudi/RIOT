@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include "senml/cbor.h"
 
 #define  SID_BATTERY             1009
 #define  SID_HEALTHVALUE         1010

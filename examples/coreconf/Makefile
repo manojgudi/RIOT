@@ -3,12 +3,14 @@
 # name of your application
 APPLICATION = gcoap_example
 
+
 # If no BOARD is found in the environment, use this default:
 BOARD ?= native
 
 # This has to be the absolute path to the RIOT base directory:
 RIOTBASE ?= $(CURDIR)/../..
 
+USEPKG += jansson
 # Include packages that pull up and auto-init the link layer.
 # NOTE: 6LoWPAN will be included if IEEE802.15.4 devices are present
 USEMODULE += netdev_default
@@ -44,7 +46,6 @@ else
 endif
 
 USEMODULE += gcoap
-
 # Required by gcoap example
 USEMODULE += od
 USEMODULE += fmt
@@ -61,7 +62,7 @@ USEMODULE += ps
 DEVELHELP ?= 1
 
 # Change this to 0 show compiler invocation lines by default:
-QUIET ?= 1
+QUIET ?= 0
 
 # Instead of simulating an Ethernet connection, we can also simulate
 # an IEEE 802.15.4 radio using ZEP
@@ -78,7 +79,11 @@ ifeq (1,$(USE_ZEP))
   endif
 endif
 
+# For cbor.h
+USEMODULE += senml_cbor
 include $(RIOTBASE)/Makefile.include
+
+
 
 # For now this goes after the inclusion of Makefile.include so Kconfig symbols
 # are available. Only set configuration via CFLAGS if Kconfig is not being used

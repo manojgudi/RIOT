@@ -18,11 +18,16 @@
  *
  * @}
  */
-
 #include <stdio.h>
+#include <jansson.h>
 
 int main(void)
 {
+
+    json_t *instance = json_object();
+    json_typeof(instance);
+    json_decref(instance);
+
     puts("Hello World!");
 
     printf("You are running RIOT on a(n) %s board.\n", RIOT_BOARD);

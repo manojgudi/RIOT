@@ -23,12 +23,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <jansson.h>
 
 #include "fmt.h"
 #include "net/gcoap.h"
 #include "net/utils.h"
+
 #include "od.h"
 #include "sid_prototypes.h"
+#include "ccoreconf.h"
+#include "fileOperations.h"
+#include "hashmap.h"
 
 #include "gcoap_example.h"
 
@@ -262,8 +267,71 @@ void notify_observers(void)
     }
 }
 
+void example(json_t *instance);
+
 void server_init(void)
 {
+
+    // Load SID in memory and build a key-mapping
+
+   const char *sidFilePath1 =
+        "./sensor@unknown.sid";
+    const char *configFile2 = "./sensor_instance.json";
+
+    const char *keyMappingString = "key-mapping";
+    SIDModelT *sidModel = malloc(sizeof(SIDModelT));
+
+    json_t *sidFile1JSON = readJSON(sidFilePath1);
+    json_t *coreconfModel = readJSON(configFile2);
+
+    // Access key-mapping
+    json_t *keyMappingJSON = json_object_get(sidFile1JSON, keyMappingString);
+    if (!json_is_object(keyMappingJSON)) {
+        fprintf(stderr, "Failed %s does not return a JSON map:", keyMappingString);
+        return;
+    }
+
+    // Build identifierSIDHashMap & sidIdentifierHashMap
+    sidModel->identifierSIDHashMap =
+        hashmap_new(sizeof(IdentifierSIDT), 0, 0, 0, identifierSIDHash, identifierSIDCompare, NULL, NULL);
+    sidModel->sidIdentifierHashMap =
+        hashmap_new(sizeof(SIDIdentifierT), 0, 0, 0, sidIdentifierHash, sidIdentifierCompare, NULL, NULL);
+
+    // Build identifierTypeHashMap
+    sidModel->identifierTypeHashMap =
+        hashmap_new(sizeof(IdentifierTypeT), 0, 0, 0, identifierTypeHash, identifierTypeCompare, NULL, NULL);
+
+    // Build SIDModel 
+    buildSIDModel2(sidModel, sidFile1JSON);
+
+    // Build keyMappingHashMap
+    sidModel->keyMappingHashMap =
+        hashmap_new(sizeof(KeyMappingT), 0, 0, 0, keyMappingHash, keyMappingCompare, NULL, NULL);
+    buildKeyMappingHashMap2(sidModel->keyMappingHashMap, sidFile1JSON, sidModel );
+
+    printKeyMappingHashMap(sidModel->keyMappingHashMap);
+    printf("---------\n");
+    // Print sidModel->identifierSIDHashMap
+    printHashMap(sidModel->identifierSIDHashMap, IDENTIFIER_SID);
+    printf("---------\n");
+    // Print sidModel->sidIdentifierHashMap
+    printHashMap(sidModel->sidIdentifierHashMap, SID_IDENTIFIER);
+    printf("---------\n");
+    // Print sidModel->identifierTypeHashMap
+    printHashMap(sidModel->identifierTypeHashMap, IDENTIFIER_TYPE);
+    printf("---------\n");
+
+
+    // Build CORECONF representation of the model file
+    lookupSID(coreconfModel, sidModel);
+
+    printf("Print the CORECONF model\n");
+    print_json_object(coreconfModel);
+    printf("---------\n");
+
+
+
+    printf("Everything is loaded\n");
 #if IS_USED(MODULE_GCOAP_DTLS)
     int res = credman_add(&credential);
     if (res < 0 && res != CREDMAN_EXIST) {

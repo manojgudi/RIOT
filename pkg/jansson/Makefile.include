@@ -1,0 +1,3 @@
+INCLUDES += -I$(BINDIR)/pkg-build/jansson/include/ -L$(BINDIR)/pkg-build/jansson/lib/ -ljansson
+ARCHIVES += $(BINDIR)/pkg-build/jansson/lib/libjansson.a
+

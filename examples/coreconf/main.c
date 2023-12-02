@@ -20,7 +20,6 @@
 
 #include <stdio.h>
 #include "msg.h"
-
 #include "net/gcoap.h"
 #include "shell.h"
 
@@ -36,6 +35,7 @@ static const shell_command_t shell_commands[] = {
 
 int main(void)
 {
+
     /* for the thread running the shell */
     msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
     server_init();

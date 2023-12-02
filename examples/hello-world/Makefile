@@ -13,6 +13,8 @@ RIOTBASE ?= $(CURDIR)/../..
 DEVELHELP ?= 1
 
 # Change this to 0 show compiler invocation lines by default:
-QUIET ?= 1
+QUIET ?= 0
+
+USEPKG += jansson
 
 include $(RIOTBASE)/Makefile.include
