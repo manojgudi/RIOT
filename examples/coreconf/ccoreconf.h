@@ -1,3 +1,6 @@
+#ifndef CCORECONF_H
+#define CCORECONF_H
+
 #include "hashmap.h"
 #include "sid.h"
 #include <jansson.h>
@@ -48,3 +51,4 @@ json_t *traverseCORECONFWithKeys(json_t *jsonInstance, SIDModelT *sidModel,
 json_t *getCCORECONF(json_t *coreconfModel, SIDModelT *sidModel, int sid, int64_t keys[], size_t keyLength, int delta,
                      int depth, json_t *value);
 void print_json_object(json_t *json);
+#endif

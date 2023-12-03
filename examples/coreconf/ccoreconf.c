@@ -3,6 +3,8 @@
 #include <jansson.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <inttypes.h>
+
 
 #define PATH_MAX_LENGTH 100
 #define MAX_STACK_SIZE 100
@@ -378,10 +380,10 @@ void lookupSID(json_t *jsonValue, SIDModelT *sidModel) {
           // currentStackElement->jsonValue = json_integer(identifierSID->sid);
           // it corrupts the json reference and the model is not updated.
 
-          char *sidString_ = malloc(sizeof(char) * SID_KEY_SIZE);
-          json_string_set(currentStackElement->jsonValue,
-                          int2str(sidString_, identifierSID->sid));
-          free(sidString_);
+          char sidString_[SID_KEY_SIZE];
+          snprintf(sidString_,  SID_KEY_SIZE, "%"PRId64, (uint64_t) identifierSID->sid);
+
+          json_string_set(currentStackElement->jsonValue, sidString_);
 
           // json_decref(currentStackElement->jsonValue);
           // json_integer_set(currentStackElement->jsonValue,
@@ -436,10 +438,10 @@ void lookupSID(json_t *jsonValue, SIDModelT *sidModel) {
         // currentStackElement->jsonValue = json_integer(identifierSID->sid); it
         // corrupts the json reference and the model is not updated. value
 
-        char *sidString_ = malloc(sizeof(char) * SID_KEY_SIZE);
-        json_string_set(currentStackElement->jsonValue,
-                        int2str(sidString_, identifierSID->sid));
-        free(sidString_);
+          char sidString_[SID_KEY_SIZE];
+          snprintf(sidString_,  SID_KEY_SIZE, "%"PRId64, (uint64_t) identifierSID->sid );
+          json_string_set(currentStackElement->jsonValue, sidString_);
+
 
         // json_decref(currentStackElement->jsonValue);
         // currentStackElement->jsonValue = json_real(identifierSID->sid);
@@ -512,7 +514,7 @@ Given a CORECONF representation of datamodel, and a SID, traverse through the
 model and return the entire {sid:value} Assume keys will be a integer array for
 now
 */
-json_t *traverseCORECONF(json_t *coreconfModel, 
+json_t* traverseCORECONF(json_t *coreconfModel, 
                          int64_t sid) {
   StackStorageT *stackStorage = (StackStorageT *)malloc(sizeof(StackStorageT));
   initStackStorage(stackStorage, MAX_STACK_SIZE);
@@ -531,7 +533,7 @@ json_t *traverseCORECONF(json_t *coreconfModel,
   json_t *returnValue = json_object();
 
   // Base SID used during recalculation
-  char *parentSID = NULL;
+  char parentSID[SID_KEY_SIZE] = "";
 
   push(stackStorage, initialStackElement);
   while (!isEmpty(stackStorage)) {
@@ -542,8 +544,8 @@ json_t *traverseCORECONF(json_t *coreconfModel,
 
       // Check
       if (((int64_t)currentStackElement->parent == sid)) {
-        char* keyString = NULL;
-        keyString = int2str(keyString, sid);
+        char keyString[SID_KEY_SIZE];
+        snprintf(keyString, SID_KEY_SIZE, "%"PRId64, (uint64_t) sid);
         json_object_set(returnValue, keyString, currentStackElement->jsonValue);
         return returnValue;
       }
@@ -551,19 +553,19 @@ json_t *traverseCORECONF(json_t *coreconfModel,
       /* obj is a JSON object */
       const char *keyString;
       json_t *value;
-
       json_object_foreach(currentStackElement->jsonValue, keyString, value) {
 
         // If parentSID is NULL then get the first
-        if (!parentSID) {
-          parentSID = (char *) keyString;
+        if (!strcmp(parentSID,"")) {
+          strcpy(parentSID, keyString);
+          //parentSID = (char *) keyString;
         }
 
         // if key matches then return the value
         int64_t deltaKey = char2int64( (char *) keyString);
         // If deltaKey is INTMAX_MIN then an error has occured
         if (deltaKey == INTMAX_MIN)
-          return NULL;
+          return (json_object());
 
         int64_t currentElementSID = deltaKey + currentStackElement->parent;
 
@@ -575,14 +577,16 @@ json_t *traverseCORECONF(json_t *coreconfModel,
     } else if (json_is_array(currentStackElement->jsonValue)) {
 
       // Can you have list of models as the outermost model?
-      if (!parentSID) {
-        parentSID = int2str(parentSID, currentStackElement->parent);
+      if (!strcmp(parentSID,"")) {
+        snprintf(parentSID, SID_KEY_SIZE, "%"PRId64, (uint64_t) currentStackElement->parent);
       }
 
       // Check
       if (((int64_t)currentStackElement->parent == sid)) {
-        char *keyString = NULL;
-        keyString = int2str(keyString, sid);
+        
+        char keyString[SID_KEY_SIZE];
+        snprintf(keyString, SID_KEY_SIZE, "%"PRId64, (uint64_t) sid);
+
         json_object_set(returnValue, keyString, currentStackElement->jsonValue);
         return returnValue;
       }
@@ -598,8 +602,8 @@ json_t *traverseCORECONF(json_t *coreconfModel,
     } else {
       // LEAVES
       // Can you have list of models as the outermost model?
-      if (!parentSID) {
-        parentSID = int2str(parentSID, currentStackElement->parent);
+      if (!strcmp(parentSID, "")) {
+        snprintf(parentSID, SID_KEY_SIZE, "%"PRId64, (uint64_t) currentStackElement->parent);
       }
 
       // Adjust the SID
@@ -607,8 +611,10 @@ json_t *traverseCORECONF(json_t *coreconfModel,
 
       // Check
       if (((int64_t)currentStackElement->parent == sid)) {
-        char *keyString = NULL;
-        keyString = int2str(keyString, sid);
+
+        char keyString[SID_KEY_SIZE];
+        snprintf(keyString, SID_KEY_SIZE, "%"PRId64, (uint64_t) sid);
+
         json_object_set(returnValue, keyString, currentStackElement->jsonValue);
         return returnValue;
       }
@@ -616,7 +622,7 @@ json_t *traverseCORECONF(json_t *coreconfModel,
   }
   // TODO free stackStorage
   // TODO free keyString, parentSID
-    return NULL;
+    return (json_object());
 }
 
 json_t *traverseCORECONFWithKeys(json_t *jsonInstance, SIDModelT *sidModel,
@@ -695,8 +701,9 @@ json_t *getCCORECONF(json_t *coreconfModel, SIDModelT *sidModel, int sid,
   int sidDiff = sid - delta;
 
   // check if sidDiff is one of the keys in the coreconfModel
-  char *sidDiffString = NULL;
-  sidDiffString = int2str(sidDiffString, sidDiff);
+  char sidDiffString[SID_KEY_SIZE];
+  snprintf(sidDiffString, SID_KEY_SIZE, "%"PRId64, (uint64_t) sidDiff);
+
   json_t *sidDiffValue = json_object_get(coreconfModel, sidDiffString);
 
   // If no keys are given and sidDiff is part of coreconfModel, then:
@@ -738,7 +745,7 @@ json_t *getCCORECONF(json_t *coreconfModel, SIDModelT *sidModel, int sid,
 
       // check if keyLength is equal to keyMapping->dynamicLongList->size, if
       // not equal, then return NULL
-      if (keyLength > keyMapping->dynamicLongList->size) {
+      if (keyLength < keyMapping->dynamicLongList->size) {
         fprintf(stderr, "Length of keys is not the same as key-mapping found "
                         "in .sid file\n");
         return NULL;
@@ -747,16 +754,18 @@ json_t *getCCORECONF(json_t *coreconfModel, SIDModelT *sidModel, int sid,
       // XXX Should keySearchObject be an internal hashmap?
       json_t *keySearchObject = json_object();
       // Iterate through dynamicLongList to build keySearchObject
-      char *newDeltaString = NULL;
+      char newDeltaString[SID_KEY_SIZE];
+
+
+
       for (int i = 0; i < (int) keyMapping->dynamicLongList->size; i++) {
         int64_t mappedKey = *(keyMapping->dynamicLongList->longList + i);
         int64_t newDelta = mappedKey - newSID;
         // XXX pop value from keys
         int64_t sidKey = *(keys + i);
-        newDeltaString = int2str(newDeltaString, newDelta);
+        snprintf(newDeltaString, SID_KEY_SIZE, "%"PRId64, (uint64_t) newDelta);
         json_object_set(keySearchObject, newDeltaString, json_integer(sidKey));
       }
-      free(newDeltaString);
 
       json_t *foundST = json_object();
       int foundIndex = 0;
@@ -790,11 +799,9 @@ json_t *getCCORECONF(json_t *coreconfModel, SIDModelT *sidModel, int sid,
           json_object_foreach(foundST, key1, value1) {
             int64_t key1_int64 = char2int64((char*) key1);
             int64_t adjustedDelta = key1_int64 + newSID;
-            char *adjustedDeltaString = NULL;
-            adjustedDeltaString =
-                int2str(adjustedDeltaString, adjustedDelta);
+            char adjustedDeltaString[SID_KEY_SIZE];
+            snprintf(adjustedDeltaString, SID_KEY_SIZE, "%"PRId64, (uint64_t) adjustedDelta);
             json_object_set(stDeltaAdjusted, adjustedDeltaString, value1);
-            free(adjustedDeltaString);
           }
           return stDeltaAdjusted;
         }
@@ -828,7 +835,6 @@ json_t *getCCORECONF(json_t *coreconfModel, SIDModelT *sidModel, int sid,
     }
   }
 
-  free(sidDiffString);
 
     if (json_object_size(result) != 0)
         return result;

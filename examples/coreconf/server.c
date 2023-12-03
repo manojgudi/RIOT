@@ -31,7 +31,6 @@
 
 #include "od.h"
 #include "sid_prototypes.h"
-#include "ccoreconf.h"
 #include "fileOperations.h"
 #include "hashmap.h"
 
@@ -73,7 +72,7 @@ static ssize_t _riot_sensor_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, c
 static const coap_resource_t _resources[] = {
     { "/cli/stats", COAP_GET | COAP_PUT, _stats_handler, NULL },
     { "/riot/board", COAP_GET, _riot_board_handler, NULL },
-    { "/riot/sensor", COAP_GET, _riot_sensor_handler, NULL}
+    { "/riot/sensor", COAP_GET | COAP_FETCH , _riot_sensor_handler, NULL}
 };
 
 static const char *_link_params[] = {
@@ -169,8 +168,14 @@ static ssize_t _riot_board_handler(coap_pkt_t *pdu, uint8_t *buf, size_t len, co
     }
 }
 
+
+SIDModelT *sidModel; 
+json_t *coreconfModel;
+
+
 static ssize_t _riot_sensor_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx)
 {
+
     (void)ctx;
 
     /* read coap method type in packet */
@@ -183,8 +188,90 @@ static ssize_t _riot_sensor_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, c
 
     unsigned char query_tmp[64] = {0};
     coap_get_uri_query(pdu, query_tmp);
+	char payload[100] = {0};
 
     switch (method_flag) {
+        case COAP_FETCH:
+
+            /*
+                Payload shall always be in the format:
+                [SID_INT_1, [SID_INT2, "key1", "key2"]]
+            */
+			strncpy(payload, (char *) pdu->payload, (size_t) pdu->payload_len);
+            json_t *requestJSON = json_loads(payload, 0, NULL);
+
+            // Return if unable to parse
+            if (!requestJSON) {
+                fprintf(stderr, "Error: Unable to parse JSON.\n");
+				// TODO SEND a FAILED response instead of a return
+                return 1;
+            }
+
+			// Check if coreconfModel is a json list
+			if (!json_is_array(requestJSON)) {
+				fprintf(stderr, "Error: coreconfModel is not a json list\n");
+				// TODO SEND a FAILED response instead of a return
+				return 2;
+			}
+
+			// Iterate through the list and print the elements
+			size_t index;
+			json_t *value;
+
+            int64_t keys[] = {0,0,0,0,0};
+            json_t* responseObject = json_array();
+            json_t* sidResponse = json_object();
+            int64_t querySID = -1;
+
+			json_array_foreach(requestJSON, index, value) {
+		       // value maybe either JSON_INT OR JSON_ARR
+          		if (json_is_array(value)) {
+                    querySID = -1;
+                    size_t index1;
+                    json_t *value1;
+                    // Prepare query for the readSwitch
+                    json_array_foreach(value, index1, value1){
+                        if (index1 == 0){
+                            querySID = json_integer_value(value1);
+                        } else {
+                            keys[index1-1] = json_integer_value(value1);
+                        }
+                    }
+
+                    sidResponse = readSwitch(querySID, coreconfModel, sidModel, keys);
+                    json_array_append(responseObject, sidResponse);
+                    printf("\nFound following tree for %lld\n", querySID);
+                    print_json_object(sidResponse);
+                    
+    			} else if (json_is_integer(value)) {
+                    querySID = json_integer_value(value); 
+                    sidResponse = readSwitch(json_integer_value(value), coreconfModel, sidModel, keys);
+                    printf("\nFound following tree for %lld\n", querySID);
+                    print_json_object(sidResponse);
+                    json_array_append(responseObject, sidResponse);
+			    } else {
+			        printf("bad type of JSON Object\n");
+    			}
+
+			}
+
+ 
+            char *json_dump = json_dumps(responseObject, 0);
+
+			
+			gcoap_resp_init(pdu, buf, len, COAP_CODE_CONTENT);
+            coap_opt_add_format(pdu, COAP_FORMAT_JSON);
+			size_t responseLength = coap_opt_finish(pdu, COAP_OPT_FINISH_PAYLOAD);
+
+            memcpy(pdu->payload, json_dump, strlen(json_dump));
+
+		    // Free resources
+			json_decref(requestJSON);
+	        json_decref(responseObject);
+
+			return responseLength + strlen(json_dump);
+			
+
         case COAP_GET:
 			// Compare if the query parameters is for SID_HEALTHVALUE
             if (! strcmp((char *) query_tmp, path_tmp) ){
@@ -267,8 +354,6 @@ void notify_observers(void)
     }
 }
 
-void example(json_t *instance);
-
 void server_init(void)
 {
 
@@ -279,10 +364,10 @@ void server_init(void)
     const char *configFile2 = "./sensor_instance.json";
 
     const char *keyMappingString = "key-mapping";
-    SIDModelT *sidModel = malloc(sizeof(SIDModelT));
+    sidModel = malloc(sizeof(SIDModelT));
+    coreconfModel = readJSON(configFile2);
 
     json_t *sidFile1JSON = readJSON(sidFilePath1);
-    json_t *coreconfModel = readJSON(configFile2);
 
     // Access key-mapping
     json_t *keyMappingJSON = json_object_get(sidFile1JSON, keyMappingString);
@@ -329,7 +414,24 @@ void server_init(void)
     print_json_object(coreconfModel);
     printf("---------\n");
 
+	/* Find the nodes corresponding to SID 1000096  */
+    json_t* traversedJSON = json_object();
+    traversedJSON = traverseCORECONF(coreconfModel, (int64_t) 1007);
+    printf("Obtained the subtree: \n");
+    print_json_object(traversedJSON);
 
+
+    // keys MUST be initialized properly and must be NON Empty
+    int64_t keys[] = {2};
+    size_t keyLength = sizeof(keys) / sizeof(keys[0]);
+    
+    // Build a valid SidIdentifierT object and then call traverseCORECONFWithKeys
+    IdentifierSIDT *sidIdentifier = malloc(sizeof(IdentifierSIDT));
+    sidIdentifier->sid = (uint64_t) 1008;
+    sidIdentifier->identifier = "";
+    json_t *traversedJSON_ = traverseCORECONFWithKeys(coreconfModel, sidModel, sidIdentifier, keys, keyLength);
+	printf("Obtained SUB SUB Tree:\n");
+	print_json_object(traversedJSON_);
 
     printf("Everything is loaded\n");
 #if IS_USED(MODULE_GCOAP_DTLS)

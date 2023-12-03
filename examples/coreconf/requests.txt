@@ -1,0 +1,4 @@
+coap-client -N -m fetch -p 5683  coap://[fe80::d84a:eff:fe90:28e3%tap0]/riot/sensor -t 50 -e '[1010, [1008, 1]]'
+
+coap-client -m post -u "username" -k "password" -e '{"key": "value"}' -t 50 coap://example.com/resource
+

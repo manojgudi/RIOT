@@ -15,6 +15,9 @@ USEPKG += jansson
 # NOTE: 6LoWPAN will be included if IEEE802.15.4 devices are present
 USEMODULE += netdev_default
 
+# For random sample generation
+USEMODULE += xtimer
+
 # use GNRC by default
 LWIP_IPV4 ?= 0
 LWIP_IPV6 ?= 0
