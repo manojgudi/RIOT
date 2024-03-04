@@ -509,6 +509,7 @@ PSEUDOMODULES += shell_cmd_sht1x
 PSEUDOMODULES += shell_cmd_sntp
 PSEUDOMODULES += shell_cmd_suit
 PSEUDOMODULES += shell_cmd_sys
+PSEUDOMODULES += shell_cmd_udptty
 PSEUDOMODULES += shell_cmd_vfs
 PSEUDOMODULES += shell_cmds_default
 ## @addtogroup sys_shell_commands
@@ -537,6 +538,7 @@ PSEUDOMODULES += soft_uart_modecfg
 PSEUDOMODULES += stdin
 PSEUDOMODULES += stdio_available
 PSEUDOMODULES += stdio_cdc_acm
+PSEUDOMODULES += stdio_dispatch
 PSEUDOMODULES += stdio_ethos
 PSEUDOMODULES += stdio_nimble_debug
 PSEUDOMODULES += stdio_telnet

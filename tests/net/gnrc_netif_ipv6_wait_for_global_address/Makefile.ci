@@ -8,6 +8,8 @@ BOARD_INSUFFICIENT_MEMORY := \
     atmega328p-xplained-mini \
     atmega8 \
     bluepill-stm32f030c8 \
+    hifive1 \
+    hifive1b \
     i-nucleo-lrwan1 \
     msb-430 \
     msb-430h \
@@ -30,4 +32,5 @@ BOARD_INSUFFICIENT_MEMORY := \
     stm32l0538-disco \
     telosb \
     waspmote-pro \
+    weact-g030f6 \
     #

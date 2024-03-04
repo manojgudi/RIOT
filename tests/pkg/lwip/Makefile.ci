@@ -3,8 +3,6 @@ BOARD_INSUFFICIENT_MEMORY := \
     blackpill-stm32f103c8 \
     bluepill-stm32f030c8 \
     bluepill-stm32f103c8 \
-    hifive1 \
-    hifive1b \
     i-nucleo-lrwan1 \
     nrf6310 \
     nucleo-c031c6 \
@@ -28,5 +26,6 @@ BOARD_INSUFFICIENT_MEMORY := \
     stm32g0316-disco \
     stm32l0538-disco \
     stm32mp157c-dk2 \
+    weact-g030f6 \
     yunjia-nrf51822 \
     #
