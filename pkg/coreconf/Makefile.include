@@ -1,0 +1,4 @@
+INCLUDES += -I$(RIOTPKG)/coreconf/include
+INCLUDES += -I$(PKGDIRBASE)/coreconf/include
+
+#DIRS += $(RIOTPKG)/coreconf/src/
