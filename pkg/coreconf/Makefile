@@ -1,6 +1,6 @@
 PKG_NAME=coreconf
 PKG_URL=https://github.com/manojgudi/ccoreconf
-PKG_VERSION=e8485afddffbf5c6cdb52a91f1f20360c5d14ad1
+PKG_VERSION=d76dbae4a60f4a2cd753aa2b92526f3a34b3c436
 PKG_LICENSE=GPL-v3.0
 
 USEPKG+=nanocbor
