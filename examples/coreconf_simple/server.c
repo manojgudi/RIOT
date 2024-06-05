@@ -68,14 +68,21 @@ static const credman_credential_t credential = {
 #include "coreconf_model_cbor.h"
 
 
-static ssize_t _encode_link(const coap_resource_t *resource, char *buf,
-                            size_t maxlen, coap_link_encoder_ctx_t *context);
+static ssize_t _encode_link(const coap_resource_t *resource, char *buf, size_t maxlen, coap_link_encoder_ctx_t *context);
 static ssize_t _stats_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx);
+static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx);
 static ssize_t _riot_board_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx);
+
+
+CoreconfValueT *coreconfModel = NULL;
+struct hashmap *clookupHashmap=NULL;
+struct hashmap *keyMappingHashMap=NULL;
+
 
 /* CoAP resources. Must be sorted by path (ASCII order). */
 static const coap_resource_t _resources[] = {
-    { "/cli/stats", COAP_GET | COAP_PUT, _stats_handler, NULL },
+    { "/cli/stats", COAP_GET | COAP_PUT | COAP_FETCH, _stats_handler, NULL },
+    { "/sid", COAP_FETCH, _sid_handler, NULL },
     { "/riot/board", COAP_GET, _riot_board_handler, NULL },
 };
 
@@ -113,22 +120,53 @@ static ssize_t _encode_link(const coap_resource_t *resource, char *buf,
 }
 
 /*
- * Server callback for /cli/stats. Accepts either a GET or a PUT.
- *
- * GET: Returns the count of packets sent by the CLI.
- * PUT: Updates the count of packets. Rejects an obviously bad request, but
- *      allows any two byte value for example purposes. Semantically, the only
- *      valid action is to set the value to 0.
+ * Server callback for /sid/. Accepts either a GET or a PUT.
+ * FETCH : Fetches the SID and keys from the payload
  */
-static ssize_t _stats_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx)
-{
+
+static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx){
     (void)ctx;
+
 
     /* read coap method type in packet */
     unsigned method_flag = coap_method2flag(coap_get_code_detail(pdu));
 
+    // Copy the payload into a buffer
+    uint8_t requestPayload[MAX_CBOR_REQUEST_PAYLOAD_SIZE] = {0};
+    memcpy(requestPayload, (char *)pdu->payload, pdu->payload_len);
+    // print the request payload
+    printf("Request Payload in CBOR Hex: ");
+    for (size_t i = 0; i < pdu->payload_len; i++){
+        printf("%02x", requestPayload[i]);
+    }
+    printf("\n");
+
+    // Import keymapping from the header
+    // Read cbor from coreconfModelCBORBuffer
+    nanocbor_value_t decoder;
+    nanocbor_decoder_init(&decoder, requestPayload, MAX_CBOR_REQUEST_PAYLOAD_SIZE);
+
+    CoreconfValueT *coreconfRequestPayload = cborToCoreconfValue(&decoder, 0);
+    printf("\nDeserialized Coreconf: \n");
+    printCoreconf(coreconfRequestPayload);
+    printf("\n");
+
+    // To hold the traversal results    
+    CoreconfValueT* coreconfResponsePayload = createCoreconfArray();
+
+    // Load key-mapping from keyMappingCBORBuffer
+    nanocbor_value_t keyMappingDecoder;
+    nanocbor_decoder_init(&keyMappingDecoder, keyMappingCBORBuffer, MAX_KEY_MAPPING_SIZE);
+    keyMappingHashMap = cborToKeyMappingHashMap(&keyMappingDecoder);
+    
+    DynamicLongListT *requestKeys = malloc(sizeof(DynamicLongListT));
+    //DynamicLongListT *requestKeys_ = malloc(sizeof(DynamicLongListT));
+    initializeDynamicLongList(requestKeys);
+
+    uint64_t requestSID = 0;
+
     switch (method_flag) {
-        case COAP_GET:
+        case COAP_GET:{
             gcoap_resp_init(pdu, buf, len, COAP_CODE_CONTENT);
             coap_opt_add_format(pdu, COAP_FORMAT_TEXT);
             size_t resp_len = coap_opt_finish(pdu, COAP_OPT_FINISH_PAYLOAD);
@@ -136,8 +174,161 @@ static ssize_t _stats_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_re
             /* write the response buffer with the request count value */
             resp_len += fmt_u16_dec((char *)pdu->payload, req_count);
             return resp_len;
+        }
+        case COAP_FETCH:{
+            /* Fetch the payload (request SID and keys 
+                Payload will be in the format:
+                [REQUESTED_SID_1, [REQUEST_SID2, REQUESTED_SID2_KEY1, REQUESTED_SID2_KEY2..]..]
+                according to https://datatracker.ietf.org/doc/html/draft-ietf-core-comi-11#section-4.2.4
+            */
 
-        case COAP_PUT:
+            // TODO Build the CLookup hashmap from CoreconfModel as traversal mutates the clookupHashmap, can you fix ccoreconf to not mutate the clookupHashmap?
+            buildCLookupHashmapFromCoreconf(coreconfModel, clookupHashmap, 0, 0);
+
+            // Iterate through the requestPayload
+            size_t arrayLength = coreconfRequestPayload->data.array_value->size;
+
+            // Check if the arrayLength MAX_PERMISSIBLE_TRAVERSAL_REQUESTS
+            if (arrayLength > MAX_PERMISSIBLE_TRAVERSAL_REQUESTS){
+                printf("Too many SIDs requested in a single requests\n");
+                return gcoap_response(pdu, buf, len, COAP_CODE_BAD_REQUEST);
+            }
+
+             for (size_t i = 0; i < arrayLength; i++) {
+                // Each element of the array is a separate traversal request
+                CoreconfValueT *requestElement = &(coreconfRequestPayload->data.array_value->elements[i]);
+                if (requestElement->type == CORECONF_UINT_64){
+                    // Query the coreconf model for an individual SID request
+                    requestSID = requestElement->data.integer_value;
+                    // Find the requirement for the SID
+                    PathNodeT *pathNodes = findRequirementForSID(requestSID, clookupHashmap, keyMappingHashMap);
+
+                    // NULL Check for pathNodes
+                    if (pathNodes == NULL){
+                        printf("SID not found in the coreconf model\n");
+                        // Move to the next requested SID
+                        continue;
+                    }
+
+                    // Print the PathNodeT
+                    printf("To reach your SID, the following SIDs  are traversed: \n");
+                    printPathNode(pathNodes);
+                    printf("---------\n");
+
+                    // Examine the coreconf model value
+                    CoreconfValueT *examinedValue = examineCoreconfValue(coreconfModel, requestKeys, pathNodes);
+
+                    // NULL Check for examinedValue
+                    if (examinedValue == NULL){
+                        printf("Couldn't find any results after the traversal\n");
+                        // Move to the next requested SID
+                        continue;
+                    }
+
+                    printf("Coreconf subtree after traversal: \n");
+                    printCoreconf(examinedValue);
+                    printf("---------\n");
+                    addToCoreconfArray(coreconfResponsePayload, examinedValue);
+
+                } else if (requestElement->type == CORECONF_ARRAY){
+                    // The first element of the array is the request SID, the rest are SID keys
+                    CoreconfValueT *requestSIDElement = &(requestElement->data.array_value->elements[0]);
+                    requestSID = requestSIDElement->data.integer_value;
+
+                    // Iterate through the rest of the array
+                    for (size_t j = 1; j < requestElement->data.array_value->size; j++){
+                        CoreconfValueT *requestKeyElement = &(requestElement->data.array_value->elements[j]);
+                        addLong(requestKeys, requestKeyElement->data.integer_value);
+                    }
+
+                    // Find the requirement for the SID
+                    PathNodeT *pathNodes = findRequirementForSID(requestSID, clookupHashmap, keyMappingHashMap);
+                    
+                    // NULL Check for pathNodes
+                    if (pathNodes == NULL){
+                        printf("SID not found in the coreconf model\n");
+                        // Move to the next requested SID
+                        continue;
+                    }
+
+                    // Print the PathNodeT
+                    printf("To reach your SID, the following SIDs  are traversed: \n");
+                    printPathNode(pathNodes);
+                    printf("---------\n");
+
+                    // Examine the coreconf model value
+                    CoreconfValueT *examinedValue = examineCoreconfValue(coreconfModel, requestKeys, pathNodes);
+
+                    // NULL Check for examinedValue
+                    if (examinedValue == NULL){
+                        printf("Couldn't find any results after the traversal\n");
+                        // Move to the next requested SID
+                        continue;
+                    }
+                    printf("Coreconf subtree after traversal: \n");
+                    printCoreconf(examinedValue);
+                    printf("---------\n");
+                    addToCoreconfArray(coreconfResponsePayload, examinedValue);  
+                }
+             }
+
+            printf("Start serialization\n");
+
+            // Serialize the response payload
+            uint8_t responsePayloadBuffer[MAX_CBOR_RESPONSE_PAYLOAD_SIZE] = {0};
+            nanocbor_encoder_t encoder;
+            nanocbor_encoder_init(&encoder, responsePayloadBuffer, MAX_CBOR_RESPONSE_PAYLOAD_SIZE);
+            printf("Encoder initialized\n  ");
+
+            coreconfToCBOR(coreconfResponsePayload, &encoder);
+            size_t responsePayloadSize = nanocbor_encoded_len(&encoder);
+
+            // Print the response payload
+            printf("Response Payload in CBOR Hex: ");
+            for (size_t i = 0; i < responsePayloadSize; i++){
+                printf("%02x", responsePayloadBuffer[i]);
+            }
+
+            // Send the response payload
+            gcoap_resp_init(pdu, buf, len, COAP_CODE_CONTENT);
+            coap_opt_add_format(pdu, COAP_FORMAT_CBOR);
+            size_t resp_len = coap_opt_finish(pdu, COAP_OPT_FINISH_PAYLOAD);
+            memcpy(pdu->payload, responsePayloadBuffer, responsePayloadSize);
+            return resp_len + responsePayloadSize;
+        }
+
+    }
+
+    return 0;
+}
+
+/*
+Default implementation 
+ * Server callback for /cli/stats. Accepts either a GET or a PUT.
+ *
+ * GET: Returns the count of packets sent by the CLI.
+ * PUT: Updates the count of packets. Rejects an obviously bad request, but
+ *      allows any two byte value for example purposes. Semantically, the only
+ *      valid action is to set the value to 0.
+ */
+static ssize_t _stats_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx){
+    (void)ctx;
+
+    /* read coap method type in packet */
+    unsigned method_flag = coap_method2flag(coap_get_code_detail(pdu));
+
+    switch (method_flag) {
+        case COAP_GET:{
+            gcoap_resp_init(pdu, buf, len, COAP_CODE_CONTENT);
+            coap_opt_add_format(pdu, COAP_FORMAT_TEXT);
+            size_t resp_len = coap_opt_finish(pdu, COAP_OPT_FINISH_PAYLOAD);
+
+            /* write the response buffer with the request count value */
+            resp_len += fmt_u16_dec((char *)pdu->payload, req_count);
+            return resp_len;
+        }
+
+        case COAP_PUT:{
             /* convert the payload to an integer and update the internal
                value */
             if (pdu->payload_len <= 5) {
@@ -149,25 +340,16 @@ static ssize_t _stats_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_re
             else {
                 return gcoap_response(pdu, buf, len, COAP_CODE_BAD_REQUEST);
             }
-
-        case COAP_FETCH:
-            /* Fetch the payload (request SID and keys 
-                Payload will be in the format:
-                [SID_UINT, [SIDKEY_UINT1, SIDKEY_UINT2]]
-            */
-            // TODO Engineering work
-            // Parse CBOR request payload
-            // Construct requestSID and requestKeys
-            // Use CLookup and keyMappingHashMap to query the model
-            return -1;
+        }
 
     }
-
     return 0;
 }
 
-static ssize_t _riot_board_handler(coap_pkt_t *pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx)
-{
+/*
+Default implementation 
+*/
+static ssize_t _riot_board_handler(coap_pkt_t *pdu, uint8_t *buf, size_t len, coap_request_ctx_t *ctx){
     (void)ctx;
     gcoap_resp_init(pdu, buf, len, COAP_CODE_CONTENT);
     coap_opt_add_format(pdu, COAP_FORMAT_TEXT);
@@ -184,8 +366,7 @@ static ssize_t _riot_board_handler(coap_pkt_t *pdu, uint8_t *buf, size_t len, co
     }
 }
 
-void notify_observers(void)
-{
+void notify_observers(void){
     size_t len;
     uint8_t buf[CONFIG_GCOAP_PDU_BUF_SIZE];
     coap_pkt_t pdu;
@@ -209,8 +390,7 @@ void notify_observers(void)
     }
 }
 
-void server_init(void)
-{
+void server_init(void){
 #if IS_USED(MODULE_GCOAP_DTLS)
     int res = credman_add(&credential);
     if (res < 0 && res != CREDMAN_EXIST) {
@@ -225,67 +405,35 @@ void server_init(void)
     }
 #endif
 
+    // Initialize the coreconf model and keymapping required for coreconf traversal from the routes
+
     // Import keymapping from the header
     // Read cbor from coreconfModelCBORBuffer
     nanocbor_value_t decoder;
-    nanocbor_decoder_init(&decoder, coreconfModelCBORBuffer, MAX_CBOR_BUFFER_SIZE);
+    nanocbor_decoder_init(&decoder, coreconfModelCBORBuffer, MAX_CORECONF_BUFFER_SIZE);
 
-    CoreconfValueT *coreconfModel = cborToCoreconfValue(&decoder, 0);
+    coreconfModel = cborToCoreconfValue(&decoder, 0);
     printf("\nDeserialized Coreconf: \n");
     printCoreconf(coreconfModel);
     printf("\n");
 
-
-
     // Load key-mapping from keyMappingCBORBuffer
     nanocbor_value_t keyMappingDecoder;
-    nanocbor_decoder_init(&keyMappingDecoder, keyMappingCBORBuffer, MAX_CBOR_BUFFER_SIZE);
-    struct hashmap *keyMappingHashMap = cborToKeyMappingHashMap(&keyMappingDecoder);
-
+    nanocbor_decoder_init(&keyMappingDecoder, keyMappingCBORBuffer, MAX_CORECONF_BUFFER_SIZE);
+    keyMappingHashMap = cborToKeyMappingHashMap(&keyMappingDecoder);
+    printf("Key Mapping: \n");
     printKeyMappingHashMap(keyMappingHashMap);
-
-    // Traverse through the deserialized Coreconf
-    printf("\nTraversing through the deserialized Coreconf: \n");
+    printf("\n");
 
     // Build Chump Lookup hashmap for faster lookups
-    struct hashmap *clookupHashmap = hashmap_new(sizeof(CLookupT), 0, 0, 0, clookupHash, clookupCompare, NULL, NULL);
+    clookupHashmap = hashmap_new(sizeof(CLookupT), 0, 0, 0, clookupHash, clookupCompare, NULL, NULL);
 
     // Build the CLookup hashmap from CoreconfModel
     buildCLookupHashmapFromCoreconf(coreconfModel, clookupHashmap, 0, 0);
-    printf("Chump lookup Correct: \n");
+    printf("Chump lookup built: \n");
     printCLookupHashmap(clookupHashmap);
-
-    // Build inputs for key requirements
-    uint64_t requestSID = 1000115;
-    DynamicLongListT *requestKeys = malloc(sizeof(DynamicLongListT));
-    initializeDynamicLongList(requestKeys);
-
-    addLong(requestKeys, 1);
-    addLong(requestKeys, 1000018);
-    addLong(requestKeys, 1);
-    addLong(requestKeys, 1000057);
-    addLong(requestKeys, 3);
-    addLong(requestKeys, 5);
-
-    // Find the requirement for the SID
-    PathNodeT *pathNodes = findRequirementForSID(requestSID, clookupHashmap, keyMappingHashMap);
-
-    // Print the PathNodeT
-    printf("PathNodeT: \n");
-    printPathNode(pathNodes);
-    printf("---------\n");
-
-    // Examine the coreconf model value
-    CoreconfValueT *examinedValue = examineCoreconfValue(coreconfModel, requestKeys, pathNodes);
-    printf("Examined the Coreconf Value subtree: \n");
-    printCoreconf(examinedValue);
-    printf("---------\n");
-
-	// Free the memory | TODO Where do we put this?
-    freeCoreconf(coreconfModel, true);
-    freeCoreconf(examinedValue, true);
-    hashmap_free(clookupHashmap);
-    hashmap_free(keyMappingHashMap);
+    printf("\nInitialized server\n");
 
     gcoap_register_listener(&_listener);
+    return;
 }
