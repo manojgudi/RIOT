@@ -11,6 +11,14 @@
  * @ingroup     sys
  * @brief       Simple shell interpreter
  *
+ * ## Security expectations
+ *
+ * Access to the shell grants access to the system that may exercise any power
+ * the firmware can exercise. While some commands only provide limited access
+ * to the system, and it is best practice for commands to validate their input,
+ * there is no expectation of security of the system when an attacker gains
+ * access to the shell.
+ *
  * @{
  *
  * @file
@@ -75,6 +83,19 @@ extern "C" {
 
 /**
  * @brief Default shell buffer size (maximum line length shell can handle)
+ *
+ * @warning When terminals that buffer input and send the full command line in
+ *   one go are used on stdin implementations with fast bursts of data,
+ *   it may be necessary to increase the @ref STDIO_RX_BUFSIZE to make
+ *   practical use of this buffer, especially because the current mechanism of
+ *   passing stdin (`isrpipe_t stdin_isrpipe`) does not support backpressure
+ *   and overflows silently. As a consequence, commands through such terminals
+ *   appear to be truncated at @ref STDIO_RX_BUFSIZE bytes (defaulting to 64)
+ *   unless the command is sent in parts (on many terminals, by presing Ctrl-D
+ *   half way through the command).
+ *
+ *   For example, this affects systems with direct USB stdio (@ref
+ *   usbus_cdc_acm_stdio) with the default terminal `pyterm`.
  */
 #define SHELL_DEFAULT_BUFSIZE   (128)
 
@@ -203,6 +224,33 @@ static inline void shell_run(const shell_command_t *commands,
 {
     shell_run_forever(commands, line_buf, len);
 }
+
+/**
+ * @brief           Parse and run a line of text as a shell command with
+ *                  arguments.
+ *
+ * @param[in]       commands    ptr to array of command structs
+ * @param[in]       line        The input line to parse
+ *
+ * @returns         return value of the found command
+ * @returns         -ENOEXEC if no valid command could be found
+ */
+int shell_handle_input_line(const shell_command_t *commands, char *line);
+
+/**
+ * @brief           Read shell commands from a file and run them.
+ *
+ * @note            This requires the `vfs` module.
+ *
+ * @param[in]       commands    ptr to array of command structs
+ * @param[in]       filename    file to read shell commands from
+ * @param[out]      line_nr     line on which an error occurred, may be NULL
+ *
+ * @returns         0 if all commands were executed successful
+ *                  error return of failed command otherwise
+ */
+int shell_parse_file(const shell_command_t *commands,
+                     const char *filename, unsigned *line_nr);
 
 #ifndef __cplusplus
 /**

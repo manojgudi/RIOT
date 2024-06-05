@@ -7,45 +7,9 @@
 
 menu "PSA Key Management Configuration"
 
-config MODULE_PSA_KEY_MANAGEMENT
-    bool
-    select MODULE_PSA_KEY_SLOT_MGMT
-    help
-        Activates the PSA Key Management Module
-
-config PSA_KEY_SIZE_128
-    bool "Application uses key of size 128 Bits"
-    help
-      Indicates that the maximum PSA key size should be at least 128 bits.
-
-config PSA_KEY_SIZE_192
-    bool
-    help
-      Indicates that the maximum PSA key size should be at least 192 bits.
-
-config PSA_KEY_SIZE_256
-    bool
-    help
-      Indicates that the maximum PSA key size should be at least 256 bits.
-
-config PSA_KEY_SIZE_512
-    bool
-    help
-      Indicates that the maximum PSA key size should be at least 512 bits.
-
-config PSA_MAX_KEY_SIZE
-    int
-    default 64 if PSA_KEY_SIZE_512
-    default 32 if PSA_KEY_SIZE_256
-    default 24 if PSA_KEY_SIZE_192
-    default 16 if PSA_KEY_SIZE_128
-    default 0
-    help
-      Indicates the maximum PSA key size in bytes.
-
 config PSA_PROTECTED_KEY_COUNT
     int "Specifies number of allocated protected key slots"
-    default 5 if MODULE_PSA_SECURE_ELEMENT
+    default 5 if USEMODULE_PSA_SECURE_ELEMENT
     default 0
 
 config PSA_ASYMMETRIC_KEYPAIR_COUNT

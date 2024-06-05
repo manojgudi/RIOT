@@ -35,6 +35,8 @@ static at_dev_t at_dev;
 static char buf[256];
 static char resp[1024];
 static char rp_buf[256];
+static bool initialized = false;
+static bool is_power_on = false;
 
 static int init(int argc, char **argv)
 {
@@ -72,6 +74,8 @@ static int init(int argc, char **argv)
         return 1;
     }
 
+    initialized = true;
+
     return res;
 }
 
@@ -79,6 +83,18 @@ static int send(int argc, char **argv)
 {
     if (argc < 2) {
         printf("Usage: %s <command>\n", argv[0]);
+        return 1;
+    }
+
+    if (initialized == false) {
+        puts("Error: AT device not initialized.\n");
+        puts("Execute init function first.\n");
+        return 1;
+    }
+
+    if (is_power_on == false) {
+        puts("Error: AT device not power on.\n");
+        puts("Execute power_on function first.\n");
         return 1;
     }
 
@@ -100,6 +116,18 @@ static int send_ok(int argc, char **argv)
         return 1;
     }
 
+    if (initialized == false) {
+        puts("Error: AT device not initialized.\n");
+        puts("Execute init function first.\n");
+        return 1;
+    }
+
+    if (is_power_on == false) {
+        puts("Error: AT device not power on.\n");
+        puts("Execute power_on function first.\n");
+        return 1;
+    }
+
     if (at_send_cmd_wait_ok(&at_dev, argv[1], 10 * US_PER_SEC) < 0) {
         puts("Error");
         return 1;
@@ -117,9 +145,21 @@ static int send_lines(int argc, char **argv)
         return 1;
     }
 
+    if (initialized == false) {
+        puts("Error: AT device not initialized.\n");
+        puts("Execute init function first.\n");
+        return 1;
+    }
+
+    if (is_power_on == false) {
+        puts("Error: AT device not power on.\n");
+        puts("Execute power_on function first.\n");
+        return 1;
+    }
+
     ssize_t len;
     if ((len = at_send_cmd_get_lines(&at_dev, argv[1], resp, sizeof(resp),
-                                         true, 10 * US_PER_SEC)) < 0) {
+                                         10 * US_PER_SEC)) < 0) {
         puts("Error");
         return 1;
     }
@@ -135,6 +175,18 @@ static int send_recv_bytes(int argc, char **argv)
 
     if (argc < 3) {
         printf("Usage: %s <command> <number of bytes>\n", argv[0]);
+        return 1;
+    }
+
+    if (initialized == false) {
+        puts("Error: AT device not initialized.\n");
+        puts("Execute init function first.\n");
+        return 1;
+    }
+
+    if (is_power_on == false) {
+        puts("Error: AT device not power on.\n");
+        puts("Execute power_on function first.\n");
         return 1;
     }
 
@@ -157,6 +209,18 @@ static int send_recv_bytes_until_string(int argc, char **argv)
 
     if (argc < 3) {
         printf("Usage: %s <command> <string to expect>\n", argv[0]);
+        return 1;
+    }
+
+    if (initialized == false) {
+        puts("Error: AT device not initialized.\n");
+        puts("Execute init function first.\n");
+        return 1;
+    }
+
+    if (is_power_on == false) {
+        puts("Error: AT device not power on.\n");
+        puts("Execute power_on function first.\n");
         return 1;
     }
 
@@ -192,6 +256,7 @@ static int power_on(int argc, char **argv)
     (void)argv;
 
     at_dev_poweron(&at_dev);
+    is_power_on = true;
 
     puts("Powered on");
 
@@ -204,6 +269,7 @@ static int power_off(int argc, char **argv)
     (void)argv;
 
     at_dev_poweroff(&at_dev);
+    is_power_on = false;
 
     puts("Powered off");
 
@@ -378,7 +444,7 @@ static int emulate_dce(int argc, char **argv)
     }
 
     res = at_send_cmd_get_lines(&at_dev, "AT+GETTWOLINES", resp_buf,
-                                sizeof(resp_buf), false, US_PER_SEC);
+                                sizeof(resp_buf), US_PER_SEC);
     if (res < 0) {
         printf("%u: Error AT+GETTWOLINES: %d\n", __LINE__, res);
         res = 1;

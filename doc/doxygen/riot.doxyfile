@@ -759,6 +759,8 @@ INPUT                  = ../../doc.txt \
                          ../../sys \
                          src/ \
                          src/mainpage.md \
+                         src/vision.md \
+                         src/community-processes.md \
                          src/roadmap.md \
                          src/creating-modules.md \
                          src/creating-an-application.md \
@@ -766,6 +768,7 @@ INPUT                  = ../../doc.txt \
                          src/driver-guide.md \
                          src/getting-started.md \
                          src/flashing.md \
+                         src/terminal-programs.md \
                          src/build-in-docker.md \
                          ../../tests/README.md \
                          src/build-system-basics.md \

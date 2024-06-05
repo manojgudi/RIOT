@@ -37,7 +37,7 @@ feature freeze period, if you develop on macOS or BSD.
 Windows users can refer to [this guide][dev-setup-windows] to
 [setup the development environment][dev-setup-windows] on Windows.
 
-[dev-setup-windows]: doc/guides/setup-windows
+[dev-setup-windows]: https://github.com/RIOT-OS/RIOT/tree/master/doc/guides/setup-windows
 
 Native development on macOS machines is not officially supported. What works well is using Linux
 in a virtual machine, but at much lower performance than running Linux natively. We also offer Docker images.
@@ -237,6 +237,16 @@ serial interface:
 
 ~~~~~~~~ {.sh}
 make term BOARD=samr21-xpro PORT=/dev/ttyACM1
+~~~~~~~~
+
+For flashing and accessing the board via the serial interface, the current user
+needs to have the correct access rights on the serial device.
+The easiest way to ensure this is to add the current user to the group that is
+owning the serial device. For example, this can be achieved on Linux by issuing
+the following line, logging out and logging in again:
+
+~~~~~~~~ {.sh}
+sudo usermod -aG $(stat --format="%G" /dev/ttyACM0) $USER
 ~~~~~~~~
 
 Note that the `PORT` macro has a slightly different semantic in `native`. Here

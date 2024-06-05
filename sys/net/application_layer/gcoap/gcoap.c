@@ -50,7 +50,7 @@
 #define NO_IMMEDIATE_REPLY (-1)
 
 /* End of the range to pick a random timeout */
-#define TIMEOUT_RANGE_END (CONFIG_COAP_ACK_TIMEOUT_MS * CONFIG_COAP_RANDOM_FACTOR_1000 / 1000)
+#define TIMEOUT_RANGE_END ((uint32_t)CONFIG_COAP_ACK_TIMEOUT_MS * CONFIG_COAP_RANDOM_FACTOR_1000 / 1000)
 
 /* Internal functions */
 static void *_event_loop(void *arg);
@@ -1612,10 +1612,10 @@ int gcoap_obs_req_forget(const sock_udp_ep_t *remote, const uint8_t *token,
     return res;
 }
 
-ssize_t gcoap_req_send_tl(const uint8_t *buf, size_t len,
-                          const sock_udp_ep_t *remote,
-                          gcoap_resp_handler_t resp_handler, void *context,
-                          gcoap_socket_type_t tl_type)
+ssize_t gcoap_req_send(const uint8_t *buf, size_t len,
+                       const sock_udp_ep_t *remote,
+                       gcoap_resp_handler_t resp_handler, void *context,
+                       gcoap_socket_type_t tl_type)
 {
     gcoap_socket_t socket = { 0 };
     gcoap_request_memo_t *memo = NULL;
