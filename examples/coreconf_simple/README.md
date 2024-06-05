@@ -118,4 +118,4 @@ You should see something like this as response (encoded in CBOR and in coreconf 
 
 Where the first element of the CBOR response containing the subtree for the first request with SID = 1008. Similarly, the second element is the subtree obtained for SID 1013 with sid key = 2.
 
-[Screenshot](https://drive.google.com/file/d/1wT39EmNiaNzCn6bviKYYM2mKM_p7XgnN/view?usp=sharing)
+[Screenshot](https://drive.google.com/file/d/1gaB-2t4Obzc6X5U4H9QuFv4mG1QauNLI/view?usp=sharing)
