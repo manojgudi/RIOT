@@ -20,7 +20,7 @@
 
 #include <stdio.h>
 #include "msg.h"
-#include "coreconfTypes.h"
+
 #include "net/gcoap.h"
 #include "shell.h"
 
@@ -28,7 +28,6 @@
 
 #define MAIN_QUEUE_SIZE (4)
 static msg_t _main_msg_queue[MAIN_QUEUE_SIZE];
-
 
 static const shell_command_t shell_commands[] = {
     { "coap", "CoAP example", gcoap_cli_cmd },
@@ -40,7 +39,6 @@ int main(void)
     /* for the thread running the shell */
     msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
     server_init();
-
     puts("gcoap example app");
 
     /* start shell */
