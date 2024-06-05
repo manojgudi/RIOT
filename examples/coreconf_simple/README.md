@@ -76,8 +76,9 @@ To implement a COAP_FETCH type of route, we need additional data structure to be
 
 A complete example of COAP_FETCH implementation is shown with the route *_sid_handler* with comments in [server.c](https://github.com/manojgudi/RIOT/blob/coreconf-integration/examples/coreconf_simple/server.c) of the coreconf-simple RIOT application.
 
-### Test
+### Testing
 
+If you want to directly want to test this demo RIOT application, you can do so.
 
 The coreconf model and key mapping both are already generated and stored in *coreconf_model_cbor.h* files for the [sensor.yang file](https://github.com/manojgudi/ccoreconf/blob/main/samples/simple_yang/sensor.yang) with [sensor_instance.json](https://github.com/manojgudi/ccoreconf/blob/main/samples/simple_yang/sensor_instance.json) and [sensor@unknown_numerical.sid](https://github.com/manojgudi/ccoreconf/blob/main/samples/simple_yang/sensor%40unknown_numerical.sid).
 
@@ -88,7 +89,7 @@ A simple COAP client is also included in [requestCBOR.py](https://github.com/man
 2. The client needs data readings leaf where the readingIndex (SID=1015) has the value 2, so it creates an array *[1013, 2]* where 2 is the **sid key**.
 
 
-The RIOT application can be build and emulated natively using the commands:
+The RIOT application can be built and emulated natively using the commands:
 ```sh
 $ cd $RIOT_WORKING_DIR/examples/coreconf_simple/
 $ CORECONF_SIMPLE_WORKING_DIR=`pwd`
