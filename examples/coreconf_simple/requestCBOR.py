@@ -2,8 +2,12 @@ import asyncio
 import aiocoap.resource as resource
 import aiocoap
 import cbor2
-
+from pprint import pprint
 async def coap_post_cbor(uri, data):
+
+    print("Sending a COAP Request with payload: ")
+    pprint(data)
+    print("-------\n\n\n")
     # Encode the data to CBOR format
     cbor_data = cbor2.dumps(data)
 
@@ -15,12 +19,12 @@ async def coap_post_cbor(uri, data):
     # Send the request and wait for the response
     response = await context.request(request).response
 
-    print('Response code:', response.code)
-    print('Response payload:', response.payload)
+    print('Response CBOR code:', response.code)
 
     cborPayload = response.payload
     coreconfData = cbor2.loads(cborPayload)
-    print(coreconfData)
+    print("For mere mortals who can't read CBOR, it is:")
+    pprint(coreconfData)
 
 
 if __name__ == "__main__":
