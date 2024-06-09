@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     # Payload as specified:
         # https://datatracker.ietf.org/doc/html/draft-ietf-core-comi-11#section-4.2.4
-    data = [1008,[1013, 2]]
+    data = [60005, [60007, 0]]
 
     asyncio.run(coap_post_cbor(uri, data))
 
