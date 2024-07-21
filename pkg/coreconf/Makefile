@@ -4,7 +4,7 @@ PKG_VERSION=8df369da477b4c86fba01ca11f3e703282ef3aab
 PKG_LICENSE=GPL-v3.0
 
 USEPKG+=nanocbor
-
+$(shell mkdir -p $(RIOTBASE)/pkg/coreconf/include)
 include $(RIOTBASE)/pkg/pkg.mk
 
 all:
