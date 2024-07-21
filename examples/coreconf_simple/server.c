@@ -199,7 +199,7 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
                 CoreconfValueT *requestElement = &(coreconfRequestPayload->data.array_value->elements[i]);
                 if (requestElement->type == CORECONF_UINT_64){
                     // Query the coreconf model for an individual SID request
-                    requestSID = requestElement->data.integer_value;
+                    requestSID = requestElement->data.u64;
                     // Find the requirement for the SID
                     PathNodeT *pathNodes = findRequirementForSID(requestSID, clookupHashmap, keyMappingHashMap);
 
@@ -233,12 +233,12 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
                 } else if (requestElement->type == CORECONF_ARRAY){
                     // The first element of the array is the request SID, the rest are SID keys
                     CoreconfValueT *requestSIDElement = &(requestElement->data.array_value->elements[0]);
-                    requestSID = requestSIDElement->data.integer_value;
+                    requestSID = requestSIDElement->data.u64;
 
                     // Iterate through the rest of the array
                     for (size_t j = 1; j < requestElement->data.array_value->size; j++){
                         CoreconfValueT *requestKeyElement = &(requestElement->data.array_value->elements[j]);
-                        addLong(requestKeys, requestKeyElement->data.integer_value);
+                        addLong(requestKeys, requestKeyElement->data.u64);
                     }
 
                     // Find the requirement for the SID
