@@ -1,0 +1,34 @@
+/**
+ * @defgroup pkg_ccoreconf ccoreconf library
+ * @ingroup  pkg
+ * @ingroup  sys
+ * @brief    CORECONF (CoAP Management Interface) library
+ *
+ * This package contains the ccoreconf library, an implementation of the
+ * CORECONF protocol specified in
+ * @url{https://datatracker.ietf.org/doc/draft-ietf-core-comi/}.
+ *
+ * ## Usage
+ *
+ * ```makefile
+ * USEPKG += ccoreconf
+ * ```
+ *
+ * Public headers are exposed under the `ccoreconf/` namespace, e.g.
+ *
+ * ```c
+ * #include <coreconfManipulation.h>
+ * #include <serialization.h>
+ * #include <coreconfTypes.h>
+ * ```
+ *
+ * ## Compatibility note
+ *
+ * RIOT pins a slightly older NanoCBOR commit than upstream. Current
+ * ccoreconf expects `nanocbor_leave_container()` to return `int` while the
+ * pinned version returns `void`. The package transparently handles the
+ * mismatch via a `--wrap=...` shim (`nanocbor_compat.c`); ccoreconf and
+ * nanocbor sources are not modified.
+ *
+ * @see https://github.com/manojgudi/ccoreconf
+ */
