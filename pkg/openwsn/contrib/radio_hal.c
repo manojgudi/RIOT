@@ -1,9 +1,6 @@
 /*
- * Copyright (C) 2020 Inria
- *
- * This file is subject to the terms and conditions of the GNU Lesser
- * General Public License v2.1. See the file LICENSE in the top level
- * directory for more details.
+ * SPDX-FileCopyrightText: 2020 Inria
+ * SPDX-License-Identifier: LGPL-2.1-only
  */
 
 /**
@@ -153,8 +150,8 @@ int openwsn_radio_init(void *radio_dev)
 
     /* Configure PHY settings (channel, TX power) */
     ieee802154_phy_conf_t conf =
-    { .channel = CONFIG_IEEE802154_DEFAULT_CHANNEL,
-      .page = CONFIG_IEEE802154_DEFAULT_CHANNEL,
+    { .phy_mode = CONFIG_IEEE802154_DEFAULT_PHY_MODE,
+      .channel = CONFIG_IEEE802154_DEFAULT_CHANNEL,
       .pow = CONFIG_IEEE802154_DEFAULT_TXPOWER };
 
     ieee802154_radio_config_phy(dev, &conf);
@@ -187,8 +184,8 @@ void radio_setFrequency(uint8_t frequency, radio_freq_t tx_or_rx)
     (void)tx_or_rx;
 
     ieee802154_phy_conf_t conf =
-    { .channel = frequency,
-      .page = CONFIG_IEEE802154_DEFAULT_CHANNEL,
+    { .phy_mode = CONFIG_IEEE802154_DEFAULT_PHY_MODE,
+      .channel = frequency,
       .pow = CONFIG_IEEE802154_DEFAULT_TXPOWER };
 
     ieee802154_radio_config_phy(openwsn_radio.dev, &conf);
