@@ -119,6 +119,17 @@ static ssize_t _encode_link(const coap_resource_t *resource, char *buf,
     return res;
 }
 
+/* Free what _sid_handler allocated for one request.  The results point into
+ * coreconfModel, so only their wrappers are freed. */
+static void _free_sid_request(CoreconfValueT *request, DynamicLongListT *keys,
+                              CoreconfValueT **results, size_t resultCount){
+    for (size_t i = 0; i < resultCount; i++){
+        freeExaminedCoreconfValue(results[i]);
+    }
+    freeDynamicLongList(keys);
+    freeCoreconf(request, true);
+}
+
 /*
  * Server callback for /sid/. Accepts either a GET or a PUT.
  * FETCH : Fetches the SID and keys from the payload
@@ -133,6 +144,9 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
 
     // Copy the payload into a buffer
     uint8_t requestPayload[MAX_CBOR_REQUEST_PAYLOAD_SIZE] = {0};
+    if (pdu->payload_len > sizeof(requestPayload)){
+        return gcoap_response(pdu, buf, len, COAP_CODE_REQUEST_ENTITY_TOO_LARGE);
+    }
     memcpy(requestPayload, (char *)pdu->payload, pdu->payload_len);
     // print the request payload
     printf("Request Payload in CBOR Hex: ");
@@ -144,24 +158,24 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
     // Import keymapping from the header
     // Read cbor from coreconfModelCBORBuffer
     nanocbor_value_t decoder;
-    nanocbor_decoder_init(&decoder, requestPayload, MAX_CBOR_REQUEST_PAYLOAD_SIZE);
+    nanocbor_decoder_init(&decoder, requestPayload, pdu->payload_len);
 
     CoreconfValueT *coreconfRequestPayload = cborToCoreconfValue(&decoder, 0);
+    // Only a CBOR array of requests is accepted
+    if (coreconfRequestPayload == NULL || coreconfRequestPayload->type != CORECONF_ARRAY){
+        freeCoreconf(coreconfRequestPayload, true);
+        return gcoap_response(pdu, buf, len, COAP_CODE_BAD_REQUEST);
+    }
     printf("\nDeserialized Coreconf: \n");
     printCoreconf(coreconfRequestPayload);
     printf("\n");
 
-    // To hold the traversal results    
-    CoreconfValueT* coreconfResponsePayload = createCoreconfArray();
+    // To hold the traversal results (at most MAX_PERMISSIBLE_TRAVERSAL_REQUESTS)
+    CoreconfValueT *results[MAX_PERMISSIBLE_TRAVERSAL_REQUESTS];
+    size_t resultCount = 0;
 
-    // Load key-mapping from keyMappingCBORBuffer
-    nanocbor_value_t keyMappingDecoder;
-    nanocbor_decoder_init(&keyMappingDecoder, keyMappingCBORBuffer, MAX_KEY_MAPPING_SIZE);
-    keyMappingHashMap = cborToKeyMappingHashMap(&keyMappingDecoder);
-    
-    DynamicLongListT *requestKeys = malloc(sizeof(DynamicLongListT));
-    //DynamicLongListT *requestKeys_ = malloc(sizeof(DynamicLongListT));
-    initializeDynamicLongList(requestKeys);
+    // keyMappingHashMap is loaded once, in server_init()
+    DynamicLongListT *requestKeys = createDynamicLongList();
 
     uint64_t requestSID = 0;
 
@@ -173,6 +187,7 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
 
             /* write the response buffer with the request count value */
             resp_len += fmt_u16_dec((char *)pdu->payload, req_count);
+            _free_sid_request(coreconfRequestPayload, requestKeys, results, resultCount);
             return resp_len;
         }
         case COAP_FETCH:{
@@ -191,6 +206,7 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
             // Check if the arrayLength MAX_PERMISSIBLE_TRAVERSAL_REQUESTS
             if (arrayLength > MAX_PERMISSIBLE_TRAVERSAL_REQUESTS){
                 printf("Too many SIDs requested in a single requests\n");
+                _free_sid_request(coreconfRequestPayload, requestKeys, results, resultCount);
                 return gcoap_response(pdu, buf, len, COAP_CODE_BAD_REQUEST);
             }
 
@@ -223,6 +239,7 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
 
                     // Examine the coreconf model value
                     CoreconfValueT *examinedValue = examineCoreconfValue(coreconfModel, requestKeys, pathNodes);
+                    freePathNode(pathNodes);
 
                     // NULL Check for examinedValue
                     if (examinedValue == NULL){
@@ -234,16 +251,20 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
                     printf("Coreconf subtree after traversal: \n");
                     printCoreconf(examinedValue);
                     printf("---------\n");
-                    addToCoreconfArray(coreconfResponsePayload, examinedValue);
+                    results[resultCount++] = examinedValue;
 
                 } else if (requestElement->type == CORECONF_ARRAY){
                     // The first element of the array is the request SID, the rest are SID keys.
                     // As above, the SID may decode as UINT_8/16/32/64; use the
                     // helper to read it portably.
+                    if (requestElement->data.array_value->size == 0){
+                        continue;
+                    }
                     CoreconfValueT *requestSIDElement = &(requestElement->data.array_value->elements[0]);
                     requestSID = getCoreconfValueAsUint64(requestSIDElement);
 
-                    // Iterate through the rest of the array
+                    // Iterate through the rest of the array, starting from an empty key list
+                    initializeDynamicLongList(requestKeys);
                     for (size_t j = 1; j < requestElement->data.array_value->size; j++){
                         CoreconfValueT *requestKeyElement = &(requestElement->data.array_value->elements[j]);
                         addLong(requestKeys, getCoreconfValueAsUint64(requestKeyElement));
@@ -266,6 +287,7 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
 
                     // Examine the coreconf model value
                     CoreconfValueT *examinedValue = examineCoreconfValue(coreconfModel, requestKeys, pathNodes);
+                    freePathNode(pathNodes);
 
                     // NULL Check for examinedValue
                     if (examinedValue == NULL){
@@ -276,7 +298,7 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
                     printf("Coreconf subtree after traversal: \n");
                     printCoreconf(examinedValue);
                     printf("---------\n");
-                    addToCoreconfArray(coreconfResponsePayload, examinedValue);  
+                    results[resultCount++] = examinedValue;
                 }
              }
 
@@ -288,8 +310,17 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
             nanocbor_encoder_init(&encoder, responsePayloadBuffer, MAX_CBOR_RESPONSE_PAYLOAD_SIZE);
             printf("Encoder initialized\n  ");
 
-            coreconfToCBOR(coreconfResponsePayload, &encoder);
+            // The response is a CBOR array with one entry per result
+            int encodeResult = nanocbor_fmt_array(&encoder, resultCount) < 0 ? -1 : 0;
+            for (size_t i = 0; i < resultCount && encodeResult == 0; i++){
+                encodeResult = coreconfToCBOR(results[i], &encoder);
+            }
             size_t responsePayloadSize = nanocbor_encoded_len(&encoder);
+            _free_sid_request(coreconfRequestPayload, requestKeys, results, resultCount);
+            if (encodeResult != 0 || responsePayloadSize > sizeof(responsePayloadBuffer)){
+                printf("Response does not fit MAX_CBOR_RESPONSE_PAYLOAD_SIZE\n");
+                return gcoap_response(pdu, buf, len, COAP_CODE_INTERNAL_SERVER_ERROR);
+            }
 
             // Print the response payload
             printf("Response Payload in CBOR Hex: ");
@@ -301,12 +332,16 @@ static ssize_t _sid_handler(coap_pkt_t* pdu, uint8_t *buf, size_t len, coap_requ
             gcoap_resp_init(pdu, buf, len, COAP_CODE_CONTENT);
             coap_opt_add_format(pdu, COAP_FORMAT_CBOR);
             size_t resp_len = coap_opt_finish(pdu, COAP_OPT_FINISH_PAYLOAD);
+            if (pdu->payload_len < responsePayloadSize){
+                return gcoap_response(pdu, buf, len, COAP_CODE_INTERNAL_SERVER_ERROR);
+            }
             memcpy(pdu->payload, responsePayloadBuffer, responsePayloadSize);
             return resp_len + responsePayloadSize;
         }
 
     }
 
+    _free_sid_request(coreconfRequestPayload, requestKeys, results, resultCount);
     return 0;
 }
 
