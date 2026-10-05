@@ -1,6 +1,6 @@
 PKG_NAME    = ccoreconf
 PKG_URL     = https://github.com/manojgudi/ccoreconf
-PKG_VERSION = ee0d00cd48054211d2e6178e4c25b4367b95b501
+PKG_VERSION = db3de906186cb37ba2f31a9a0ec5c4a4e01df6b9
 PKG_LICENSE = MIT
 
 include $(RIOTBASE)/pkg/pkg.mk
